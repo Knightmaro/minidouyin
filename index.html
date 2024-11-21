@@ -36,7 +36,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1);
+            transition: transform 0.3s cubic-bezier(0.33, 1, 0.68, 1);
             will-change: transform;
         }
 
@@ -166,22 +166,48 @@
             isDragging = false;
 
             const threshold = 100;
+            const current = wrapper.querySelector('.current');
+            const next = wrapper.querySelector('.next');
+            const prev = wrapper.querySelector('.prev');
+
+            // 使用更长的动画时间和更自然的缓动函数
+            const transition = 'transform 0.8s cubic-bezier(0.33, 0.66, 0.66, 1)';
             document.querySelectorAll('.image-item').forEach(item => {
-                item.style.transition = 'transform 0.5s cubic-bezier(0.33, 1, 0.68, 1)';
+                item.style.transition = transition;
             });
 
             if (Math.abs(currentY) > threshold) {
                 if (currentY < 0 && currentIndex < images.length - 1) {
+                    // 向上滑动到下一张
+                    current.style.transform = 'translateY(-100%)';
+                    next.style.transform = 'translateY(0)';
                     currentIndex++;
                 } else if (currentY > 0 && currentIndex > 0) {
+                    // 向下滑动到上一张
+                    current.style.transform = 'translateY(100%)';
+                    prev.style.transform = 'translateY(0)';
                     currentIndex--;
                 }
+            } else {
+                // 回到原位
+                if (current) current.style.transform = 'translateY(0)';
+                if (next) next.style.transform = 'translateY(100%)';
+                if (prev) prev.style.transform = 'translateY(-100%)';
             }
 
-            setTimeout(() => {
-                showImages();
-                currentY = 0;
-            }, 500);
+            // 使用 transitionend 事件来处理动画结束
+            const handleTransitionEnd = (e) => {
+                if (e.target.classList.contains('current')) {
+                    showImages();
+                    currentY = 0;
+                    // 移除事件监听
+                    current.removeEventListener('transitionend', handleTransitionEnd);
+                }
+            };
+
+            if (current) {
+                current.addEventListener('transitionend', handleTransitionEnd);
+            }
         });
 
         // 初始化加载
