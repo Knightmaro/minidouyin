@@ -522,13 +522,11 @@
         
         // 添加状态重置函数
         function resetAllStates() {
-            // 重置触摸状态
             isAnimating = false;
             isDragging = false;
             isScaling = false;
             isPanning = false;
             
-            // 重置位置和缩放
             startX = 0;
             startY = 0;
             currentX = 0;
@@ -539,7 +537,8 @@
             startDistance = 0;
             
             // 清除所有变换样式
-            document.querySelectorAll('.image-item img').forEach(img => {
+            const images = document.querySelectorAll('.image-item img');
+            images.forEach(img => {
                 img.style.transition = 'none';
                 img.style.transform = '';
             });
@@ -587,19 +586,23 @@
         }
 
         function createImageElement(index, className) {
-            const imageItem = document.createElement('div');
-            imageItem.className = `image-item ${className}`;
+            const imageContainer = document.createElement('div');
+            imageContainer.className = `image-item ${className}`;
             
             const img = document.createElement('img');
             img.src = images[index].url;
-            img.alt = images[index].name;
-            img.style.transform = 'scale(1)';
-            img.style.transformOrigin = 'center center';
-            img.style.transition = 'transform 0.3s ease';
             
-            imageItem.appendChild(img);
-            wrapper.appendChild(imageItem);
-            return imageItem;
+            // 添加加载事件处理
+            img.onload = () => {
+                imageContainer.classList.add('loaded');
+            };
+            
+            img.onerror = () => {
+                imageContainer.classList.add('error');
+            };
+            
+            imageContainer.appendChild(img);
+            wrapper.appendChild(imageContainer);
         }
 
         wrapper.addEventListener('touchstart', (e) => {
@@ -908,11 +911,39 @@
         });
 
         // 推荐按钮点击事件
-        recommendBtn.addEventListener('click', () => {
-            resetAllStates();
-            galleryPage.style.display = 'none';
-            showImages();
-        });
+        recommendBtn.onclick = async () => {
+            try {
+                // 如果正在动画中，不响应点击
+                if (isAnimating) return;
+                
+                // 如果当前没有图片，直接返回
+                if (images.length === 0) return;
+                
+                // 记录当前索引
+                const previousIndex = currentIndex;
+                
+                // 生成新的随机索引，确保不会连续显示同一张图片
+                let newIndex;
+                do {
+                    newIndex = Math.floor(Math.random() * images.length);
+                } while (newIndex === previousIndex && images.length > 1);
+                
+                // 更新当前索引
+                currentIndex = newIndex;
+                
+                // 重置所有状态
+                resetAllStates();
+                
+                // 确保在推荐页面
+                galleryPage.style.display = 'none';
+                
+                // 显示新图片
+                showImages();
+                
+            } catch (error) {
+                console.error('推荐刷新失败:', error);
+            }
+        };
 
         // 添加选择模式相关的状态
         let isSelectMode = false;
@@ -1337,6 +1368,23 @@
                 // 立即从本地数组中移除这些图片
                 images = images.filter(img => !selectedImages.has(img.url));
                 
+                // 立即清除这些图片的本地缓存
+                for (const file of filesToDelete) {
+                    try {
+                        // 清除浏览器的图片缓存
+                        const response = await fetch(file.url, { 
+                            method: 'HEAD',
+                            cache: 'no-cache' 
+                        });
+                        
+                        // 强制浏览器刷新图片缓存
+                        const img = new Image();
+                        img.src = file.url + '?t=' + new Date().getTime();
+                    } catch (error) {
+                        console.error('清除缓存失败:', error);
+                    }
+                }
+                
                 // 立即退出选择模式并刷新图库显示
                 exitSelectMode();
                 showGallery();
@@ -1349,7 +1397,8 @@
                             {
                                 headers: {
                                     'Authorization': `token ${getToken()}`,
-                                    'Accept': 'application/vnd.github.v3+json'
+                                    'Accept': 'application/vnd.github.v3+json',
+                                    'Cache-Control': 'no-cache'
                                 }
                             }
                         );
@@ -1365,6 +1414,7 @@
                                 headers: {
                                     'Authorization': `token ${getToken()}`,
                                     'Content-Type': 'application/json',
+                                    'Cache-Control': 'no-cache'
                                 },
                                 body: JSON.stringify({
                                     message: `Delete ${file.filename}`,
@@ -1420,6 +1470,139 @@
             if (toast && toast.parentNode) {
                 toast.parentNode.removeChild(toast);
             }
+        }
+
+        // 修改图片加载逻辑，添加缓存控制
+        function loadImage(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = url + '?t=' + new Date().getTime(); // 添加时间戳防止缓存
+            });
+        }
+
+        // 在 showGallery 函数中使用新的图片加载方式
+        function showGallery() {
+            galleryGrid.innerHTML = '';
+            
+            // 添删除操作栏（保持不变）
+            const actionBar = document.createElement('div');
+            actionBar.className = 'gallery-action-bar';
+            actionBar.innerHTML = `
+                <button class="nav-btn delete-btn" id="deleteBtn">删除 (0)</button>
+                <button class="nav-btn cancel-btn" id="cancelBtn">取消</button>
+            `;
+            actionBar.style.display = 'none';
+            galleryGrid.parentElement.insertBefore(actionBar, galleryGrid);
+            
+            const deleteBtn = document.getElementById('deleteBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+            
+            // 删除和取消按的事件处理...（保持不变）
+            deleteBtn.addEventListener('click', async () => {
+                if (selectedImages.size === 0) return;
+                if (confirm(`确定要删除这 ${selectedImages.size} 张图片吗？`)) {
+                    try {
+                        for (const imageUrl of selectedImages) {
+                            const filename = imageUrl.split('/').pop();
+                            await deleteFromGithub(filename);
+                        }
+                        await init();
+                        exitSelectMode();
+                        showGallery();
+                    } catch (error) {
+                        console.error('删除失败:', error);
+                        alert('删除失败，请重试');
+                    }
+                }
+            });
+            
+            cancelBtn.addEventListener('click', exitSelectMode);
+            
+            // 按时间排序图片
+            const sortedImages = [...images].sort((a, b) => {
+                return new Date(b.date) - new Date(a.date);
+            });
+            
+            let currentDate = '';
+            
+            sortedImages.forEach(image => {
+                const date = new Date(image.date).toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                
+                // 添加日期分隔
+                if (date !== currentDate) {
+                    currentDate = date;
+                    const timeDivider = document.createElement('div');
+                    timeDivider.className = 'time-divider';
+                    timeDivider.textContent = date;
+                    galleryGrid.appendChild(timeDivider);
+                }
+                
+                // 创建缩略图容器
+                const thumbnail = document.createElement('div');
+                thumbnail.className = 'thumbnail loading';
+                
+                // 创建图片元素时使用新的加载方式
+                const imgElement = document.createElement('img');
+                imgElement.src = image.url + '?t=' + new Date().getTime();
+                
+                // 图片加载完成后移除加载状态
+                imgElement.onload = () => {
+                    thumbnail.classList.remove('loading');
+                };
+                imgElement.onerror = () => {
+                    thumbnail.classList.remove('loading');
+                    thumbnail.classList.add('error');
+                };
+                
+                thumbnail.appendChild(imgElement);
+                
+                // 添加选择指示器
+                const selector = document.createElement('div');
+                selector.className = 'image-selector';
+                selector.innerHTML = '<div class="checkmark"></div>';
+                thumbnail.appendChild(selector);
+                
+                // 长按处理
+                thumbnail.addEventListener('touchstart', (e) => {
+                    longPressTimer = setTimeout(() => {
+                        if (!isSelectMode) {
+                            enterSelectMode();
+                            toggleImageSelection(thumbnail, image.url);
+                        }
+                    }, LONG_PRESS_DURATION);
+                });
+                
+                thumbnail.addEventListener('touchend', () => {
+                    clearTimeout(longPressTimer);
+                });
+                
+                thumbnail.addEventListener('touchmove', () => {
+                    clearTimeout(longPressTimer);
+                });
+                
+                // 点击处理
+                thumbnail.addEventListener('click', () => {
+                    if (isSelectMode) {
+                        toggleImageSelection(thumbnail, image.url);
+                    } else {
+                        resetAllStates();
+                        currentIndex = images.findIndex(img => img.url === image.url);
+                        showImages();
+                        galleryPage.style.display = 'none';
+                    }
+                });
+                
+                galleryGrid.appendChild(thumbnail);
+                
+                // 开始观察这个缩略图
+                thumbnailObserver.observe(thumbnail);
+            });
         }
     </script>
 </body>
