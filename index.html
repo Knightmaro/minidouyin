@@ -19,28 +19,25 @@
         .container {
             height: 100vh;
             position: relative;
-            touch-action: none; /* 防止浏览器默认的触摸行为 */
+            overflow: hidden;
         }
 
         .image-wrapper {
-            position: absolute;
-            width: 100%;
+            position: relative;
             height: 100vh;
-            transition: transform 0.3s ease;
-            transform: translateZ(0); /* 启用硬件加速 */
-            will-change: transform;
             touch-action: none;
         }
 
         .image-item {
+            position: absolute;
             width: 100%;
             height: 100vh;
+            left: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            position: absolute;
-            left: 0;
-            overflow: hidden; /* 防止图片溢出 */
+            transition: transform 0.3s ease;
+            will-change: transform;
         }
 
         .image-item img {
@@ -51,20 +48,34 @@
             -webkit-user-drag: none;
         }
 
+        .current {
+            transform: translateY(0);
+            z-index: 2;
+        }
+
+        .next {
+            transform: translateY(100%);
+            z-index: 1;
+        }
+
+        .prev {
+            transform: translateY(-100%);
+            z-index: 1;
+        }
+
         .loading {
             color: white;
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            z-index: 10;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="image-wrapper" id="imageWrapper">
-            <!-- 图片将被动态插入这里 -->
-        </div>
+        <div class="image-wrapper" id="imageWrapper"></div>
         <div class="loading" id="loading">加载中...</div>
     </div>
 
@@ -78,15 +89,101 @@
         };
 
         let images = [];
-        let currentIndex = 0;
         let startY = 0;
         let currentY = 0;
+        let currentIndex = 0;
         let isDragging = false;
         let wrapper = document.getElementById('imageWrapper');
         let loading = document.getElementById('loading');
         
-        // 获取 GitHub 图片列表
-        async function fetchImages() {
+        function showImages() {
+            wrapper.innerHTML = '';
+            
+            // 创建当前图片
+            if (currentIndex >= 0 && currentIndex < images.length) {
+                createImageElement(currentIndex, 'current');
+            }
+            
+            // 创建下一张图片
+            if (currentIndex + 1 < images.length) {
+                createImageElement(currentIndex + 1, 'next');
+            }
+            
+            // 创建上一张图片
+            if (currentIndex > 0) {
+                createImageElement(currentIndex - 1, 'prev');
+            }
+        }
+
+        function createImageElement(index, className) {
+            const imageItem = document.createElement('div');
+            imageItem.className = `image-item ${className}`;
+            
+            const img = document.createElement('img');
+            img.src = images[index].url;
+            img.alt = images[index].name;
+            
+            imageItem.appendChild(img);
+            wrapper.appendChild(imageItem);
+            return imageItem;
+        }
+
+        wrapper.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+            isDragging = true;
+            document.querySelectorAll('.image-item').forEach(item => {
+                item.style.transition = 'none';
+            });
+        });
+
+        wrapper.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            const deltaY = e.touches[0].clientY - startY;
+            currentY = deltaY;
+
+            const current = wrapper.querySelector('.current');
+            const next = wrapper.querySelector('.next');
+            const prev = wrapper.querySelector('.prev');
+
+            if (current) {
+                current.style.transform = `translateY(${deltaY}px)`;
+            }
+            
+            if (next && deltaY < 0) {
+                next.style.transform = `translateY(calc(100% + ${deltaY}px))`;
+            }
+            
+            if (prev && deltaY > 0) {
+                prev.style.transform = `translateY(calc(-100% + ${deltaY}px))`;
+            }
+
+            e.preventDefault();
+        });
+
+        wrapper.addEventListener('touchend', () => {
+            if (!isDragging) return;
+            isDragging = false;
+
+            const threshold = 100; // 切换阈值
+            document.querySelectorAll('.image-item').forEach(item => {
+                item.style.transition = 'transform 0.3s ease';
+            });
+
+            if (Math.abs(currentY) > threshold) {
+                if (currentY < 0 && currentIndex < images.length - 1) {
+                    currentIndex++;
+                } else if (currentY > 0 && currentIndex > 0) {
+                    currentIndex--;
+                }
+            }
+
+            showImages();
+            currentY = 0;
+        });
+
+        // 初始化加载
+        async function init() {
             try {
                 const response = await fetch(
                     `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`
@@ -100,120 +197,14 @@
                     }));
                 
                 loading.style.display = 'none';
-                loadInitialImages();
+                showImages();
             } catch (error) {
                 console.error('获取图片失败:', error);
                 loading.textContent = '加载失败，请刷新重试';
             }
         }
 
-        // 加载初始图片
-        function loadInitialImages() {
-            showImage(currentIndex);
-            // 预加载下一张
-            if (currentIndex + 1 < images.length) {
-                preloadImage(images[currentIndex + 1].url);
-            }
-        }
-
-        // 显示图片
-        function showImage(index) {
-            const imageItem = document.createElement('div');
-            imageItem.className = 'image-item';
-            
-            const img = document.createElement('img');
-            img.src = images[index].url;
-            img.alt = images[index].name;
-            
-            // 添加加载状态显示
-            img.onload = () => {
-                loading.style.display = 'none';
-            };
-            
-            img.onerror = () => {
-                loading.textContent = '图片加载失败';
-            };
-            
-            imageItem.appendChild(img);
-            wrapper.appendChild(imageItem);
-        }
-
-        // 预加载图片
-        function preloadImage(url) {
-            const img = new Image();
-            img.src = url;
-        }
-
-        // 触摸事件处理
-        wrapper.addEventListener('touchstart', (e) => {
-            isDragging = true;
-            startY = e.touches[0].clientY;
-            wrapper.style.transition = 'none';
-        });
-
-        wrapper.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            
-            const touch = e.touches[0];
-            const deltaY = touch.clientY - startY;
-            currentY = deltaY;
-            
-            // 限制滑动范围
-            if (currentIndex === 0 && deltaY > 100) return;
-            if (currentIndex === images.length - 1 && deltaY < -100) return;
-            
-            wrapper.style.transform = `translateY(${deltaY}px)`;
-            e.preventDefault();
-        });
-
-        wrapper.addEventListener('touchend', () => {
-            if (!isDragging) return;
-            isDragging = false;
-            
-            wrapper.style.transition = 'transform 0.3s ease';
-            
-            // 判断滑动方向和距离
-            if (Math.abs(currentY) > 50) {
-                if (currentY < 0 && currentIndex < images.length - 1) {
-                    // 向上滑
-                    currentIndex++;
-                } else if (currentY > 0 && currentIndex > 0) {
-                    // 向下滑
-                    currentIndex--;
-                }
-            }
-            
-            // 重置位置并显示新图片
-            wrapper.innerHTML = '';
-            showImage(currentIndex);
-            wrapper.style.transform = 'translateY(0)';
-            
-            // 预加载下一张
-            if (currentIndex + 1 < images.length) {
-                preloadImage(images[currentIndex + 1].url);
-            }
-        });
-
-        // 添加防止页面滚动
-        document.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-        }, { passive: false });
-
-        // 添加键盘控制（可选）
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowUp' && currentIndex > 0) {
-                currentIndex--;
-                wrapper.innerHTML = '';
-                showImage(currentIndex);
-            } else if (e.key === 'ArrowDown' && currentIndex < images.length - 1) {
-                currentIndex++;
-                wrapper.innerHTML = '';
-                showImage(currentIndex);
-            }
-        });
-
-        // 初始化
-        fetchImages();
+        init();
     </script>
 </body>
 </html>
