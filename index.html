@@ -483,6 +483,31 @@
         let lastTranslateY = 0;
         let isPanning = false;
         
+        // 添加状态重置函数
+        function resetAllStates() {
+            // 重置触摸状态
+            isAnimating = false;
+            isDragging = false;
+            isScaling = false;
+            isPanning = false;
+            
+            // 重置位置和缩放
+            startX = 0;
+            startY = 0;
+            currentX = 0;
+            currentY = 0;
+            lastTranslateX = 0;
+            lastTranslateY = 0;
+            currentScale = 1;
+            startDistance = 0;
+            
+            // 清除所有变换样式
+            document.querySelectorAll('.image-item img').forEach(img => {
+                img.style.transition = 'none';
+                img.style.transform = '';
+            });
+        }
+
         // 添加重置状态的函数
         function resetTouchState() {
             isAnimating = false;
@@ -512,6 +537,7 @@
 
         function showImages() {
             wrapper.innerHTML = '';
+            resetAllStates();
             
             // 获取当前、上一张和下一张图片的索引
             const prevIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1;
@@ -629,7 +655,28 @@
             e.preventDefault();
         });
 
-        wrapper.addEventListener('touchend', () => {
+        wrapper.addEventListener('touchend', (e) => {
+            if (isScaling) {
+                isScaling = false;
+                const currentImage = wrapper.querySelector('.current img');
+                
+                if (currentImage) {
+                    currentScale = getCurrentScale();
+                    
+                    // 如果缩放接近原始大小，重置所有状态
+                    if (Math.abs(currentScale - 1) < 0.1) {
+                        resetAllStates();
+                        currentImage.style.transition = 'transform 0.3s ease';
+                        currentImage.style.transform = '';
+                    } else {
+                        // 保存当前的平移位置
+                        lastTranslateX = currentX;
+                        lastTranslateY = currentY;
+                    }
+                }
+                return;
+            }
+            
             if (!isDragging || isAnimating || currentScale !== 1) return;
             isDragging = false;
             isAnimating = true;
@@ -803,28 +850,21 @@
 
         // 显示图库
         galleryBtn.addEventListener('click', () => {
-            console.log('Gallery button clicked');
+            resetAllStates();
             galleryPage.style.display = 'block';
             showGallery();
         });
 
         // 返回荐页
         backBtn.addEventListener('click', () => {
-            console.log('Back button clicked');
+            resetAllStates();
             galleryPage.style.display = 'none';
-            cleanupGallery();
         });
 
         // 推荐按钮点击事件
         recommendBtn.addEventListener('click', () => {
-            console.log('Recommend button clicked');
-            // 隐藏图库页面
+            resetAllStates();
             galleryPage.style.display = 'none';
-            
-            // 重新打乱图片顺序
-            images = shuffleArray([...images]);
-            
-            // 重新��图片
             showImages();
         });
 
@@ -921,7 +961,7 @@
                 
                 // 创建图片元素，但不立即设置 src
                 const imgElement = document.createElement('img');
-                imgElement.dataset.src = image.url; // 使用 data-src 存储 URL
+                imgElement.dataset.src = image.url; // 使��� data-src 存储 URL
                 
                 // 图片加载完成后移除加载状态
                 imgElement.onload = () => {
@@ -962,7 +1002,8 @@
                 thumbnail.addEventListener('click', () => {
                     if (isSelectMode) {
                         toggleImageSelection(thumbnail, image.url);
-                    } else if (!thumbnail.classList.contains('error')) {
+                    } else {
+                        resetAllStates();
                         currentIndex = images.findIndex(img => img.url === image.url);
                         showImages();
                         galleryPage.style.display = 'none';
@@ -1073,6 +1114,8 @@
             if (!currentImage) return 1;
             
             const transform = currentImage.style.transform;
+            if (!transform || transform === 'none') return 1;
+            
             const match = transform.match(/scale\((.*?)\)/);
             return match ? parseFloat(match[1]) : 1;
         }
