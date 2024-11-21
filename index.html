@@ -78,12 +78,216 @@
             transform: translate(-50%, -50%);
             z-index: 10;
         }
+
+        /* 底部导航栏 */
+        .bottom-nav {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        /* 磨砂玻璃按钮 */
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 12px 24px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .glass-btn:active {
+            transform: scale(0.95);
+        }
+
+        .glass-btn .icon {
+            font-size: 20px;
+        }
+
+        .glass-btn span {
+            font-size: 12px;
+        }
+
+        /* 图库页面 */
+        .gallery-page {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 200;
+            display: none;
+            overflow-y: auto;
+        }
+
+        .gallery-header {
+            position: sticky;
+            top: 0;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            z-index: 1;
+        }
+
+        .gallery-header h1 {
+            color: white;
+            font-size: 20px;
+            font-weight: normal;
+        }
+
+        .back-btn {
+            padding: 8px;
+            font-size: 20px;
+        }
+
+        .gallery-grid {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* 时间线 */
+        .time-divider {
+            grid-column: 1 / -1;
+            color: white;
+            padding: 20px 0 10px;
+            font-size: 14px;
+            opacity: 0.8;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin: 10px 0;
+        }
+
+        /* 缩略图 */
+        .thumbnail {
+            aspect-ratio: 1;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            min-height: 120px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .thumbnail:active {
+            transform: scale(0.95);
+        }
+
+        /* 添加缩略图加载状态样式 */
+        .thumbnail.loading {
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .thumbnail.loading::after {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .thumbnail:hover {
+            transform: scale(1.05);
+        }
+
+        .thumbnail:active {
+            transform: scale(0.95);
+        }
+
+        .thumbnail.error {
+            background: rgba(255, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+        }
+
+        .retry-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .retry-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 适配不同屏幕尺寸 */
+        @media (max-width: 768px) {
+            .gallery-grid {
+                gap: 10px;
+                padding: 15px;
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .gallery-grid {
+                gap: 20px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="image-wrapper" id="imageWrapper"></div>
         <div class="loading" id="loading">加载中...</div>
+        <div class="bottom-nav">
+            <button class="glass-btn" id="recommendBtn">
+                <i class="icon">🏠</i>
+                <span>推荐</span>
+            </button>
+            <button class="glass-btn" id="galleryBtn">
+                <i class="icon">🖼️</i>
+                <span>图库</span>
+            </button>
+        </div>
+        <div class="gallery-page" id="galleryPage">
+            <div class="gallery-header">
+                <button class="back-btn glass-btn" id="backBtn">
+                    <i class="icon">←</i>
+                </button>
+                <h1>图库</h1>
+            </div>
+            <div class="gallery-grid" id="galleryGrid"></div>
+        </div>
     </div>
 
     <script>
@@ -268,12 +472,35 @@
                     `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`
                 );
                 const data = await response.json();
-                images = data
+                
+                // 获取每个文件的详细信息，包括创建日期
+                const imagePromises = data
                     .filter(file => /\.(jpg|jpeg|png|gif)$/i.test(file.name))
-                    .map(file => ({
-                        url: file.download_url,
-                        name: file.name
-                    }));
+                    .map(async file => {
+                        try {
+                            // 获取文件�� commit 历史
+                            const commitResponse = await fetch(
+                                `https://api.github.com/repos/${config.owner}/${config.repo}/commits?path=${config.path}/${file.name}&page=1&per_page=1`
+                            );
+                            const commits = await commitResponse.json();
+                            const createDate = commits[0]?.commit?.author?.date || new Date().toISOString();
+                            
+                            return {
+                                url: file.download_url,
+                                name: file.name,
+                                date: createDate
+                            };
+                        } catch (error) {
+                            console.error(`获取文件 ${file.name} 的历史记录失败:`, error);
+                            return {
+                                url: file.download_url,
+                                name: file.name,
+                                date: new Date().toISOString() // 如果获取失败，使用当前时间
+                            };
+                        }
+                    });
+
+                images = await Promise.all(imagePromises);
                 
                 // 随机排序图片数组
                 images = shuffleArray(images);
@@ -287,6 +514,96 @@
         }
 
         init();
+
+        const galleryPage = document.getElementById('galleryPage');
+        const galleryGrid = document.getElementById('galleryGrid');
+        const recommendBtn = document.getElementById('recommendBtn');
+        const galleryBtn = document.getElementById('galleryBtn');
+        const backBtn = document.getElementById('backBtn');
+
+        // 显示图库
+        galleryBtn.addEventListener('click', () => {
+            galleryPage.style.display = 'block';
+            showGallery();
+        });
+
+        // 返回推荐页
+        backBtn.addEventListener('click', () => {
+            galleryPage.style.display = 'none';
+        });
+
+        // 显示图库内容
+        async function showGallery() {
+            galleryGrid.innerHTML = '';
+            
+            const sortedImages = [...images].sort((a, b) => {
+                return new Date(b.date) - new Date(a.date);
+            });
+            
+            let currentDate = '';
+            
+            sortedImages.forEach(image => {
+                const date = new Date(image.date).toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                
+                if (date !== currentDate) {
+                    currentDate = date;
+                    const divider = document.createElement('div');
+                    divider.className = 'time-divider';
+                    divider.textContent = date;
+                    galleryGrid.appendChild(divider);
+                }
+                
+                const thumbnail = document.createElement('div');
+                thumbnail.className = 'thumbnail loading';
+                
+                const img = new Image();
+                
+                const loadTimeout = setTimeout(() => {
+                    if (thumbnail.classList.contains('loading')) {
+                        thumbnail.classList.remove('loading');
+                        thumbnail.classList.add('error');
+                        thumbnail.textContent = '加载超��';
+                        console.error('Image load timeout:', image.url);
+                    }
+                }, 30000);
+
+                img.onload = () => {
+                    clearTimeout(loadTimeout);
+                    console.log('Image loaded successfully:', image.url);
+                    thumbnail.style.backgroundImage = `url("${image.url}")`;
+                    thumbnail.classList.remove('loading');
+                    
+                    if (thumbnail.classList.contains('error')) {
+                        thumbnail.classList.remove('error');
+                        thumbnail.textContent = '';
+                    }
+                };
+
+                img.onerror = (error) => {
+                    clearTimeout(loadTimeout);
+                    console.error('Image load error:', image.url, error);
+                    thumbnail.classList.remove('loading');
+                    thumbnail.classList.add('error');
+                    thumbnail.textContent = '加载失败';
+                };
+
+                img.src = image.url;
+                
+                thumbnail.addEventListener('click', () => {
+                    if (!thumbnail.classList.contains('error')) {
+                        currentIndex = images.findIndex(img => img.url === image.url);
+                        showImages();
+                        galleryPage.style.display = 'none';
+                    }
+                });
+                
+                galleryGrid.appendChild(thumbnail);
+            });
+        }
     </script>
 </body>
 </html>
