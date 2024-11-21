@@ -168,14 +168,15 @@
             font-weight: normal;
         }
 
+        /* 图库网格布局 */
         .gallery-grid {
-            padding: 15px;
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            max-width: 100%;
-            margin: 0 auto;
+            grid-template-columns: repeat(3, 1fr) !important; /* 强制三列 */
+            gap: 8px;
+            padding: 10px;
             box-sizing: border-box;
+            width: 100%;
+            max-width: 100%;
         }
 
         /* 时间线 */
@@ -189,14 +190,14 @@
             margin: 10px 0;
         }
 
-        /* 缩略图 */
+        /* 缩略图容器 */
         .thumbnail {
             aspect-ratio: 1;
+            width: 100% !important; /* 强制宽度 */
             position: relative;
             overflow: hidden;
             border-radius: 12px;
             cursor: pointer;
-            transition: all 0.3s ease;
             background: rgba(255, 255, 255, 0.1);
         }
 
@@ -310,7 +311,7 @@
         /* 针对特小屏幕的优化 */
         @media (max-width: 360px) {
             .gallery-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(3, 1fr) !important;
                 gap: 6px;
                 padding: 8px;
             }
@@ -607,7 +608,7 @@
                 // 处理双指缩放
                 const currentDistance = getDistance(e.touches[0], e.touches[1]);
                 const scale = (currentDistance / startDistance) * currentScale;
-                const limitedScale = Math.min(Math.max(scale, 0.5), 3);
+                const limitedScale = Math.min(Math.max(scale, 0.5), 10);
                 
                 const currentImage = wrapper.querySelector('.current img');
                 if (currentImage) {
@@ -704,7 +705,7 @@
 
             if (Math.abs(currentY) > threshold) {
                 if (currentY < 0) {
-                    // 向上滑动，显示下一张
+                    // 向上滑动，显下一张
                     current.style.transform = 'translateY(-100%)';
                     next.style.transform = 'translateY(0)';
                     currentIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0;
@@ -961,7 +962,7 @@
                 
                 // 创建图片元素，但不立即设置 src
                 const imgElement = document.createElement('img');
-                imgElement.dataset.src = image.url; // 使��� data-src 存储 URL
+                imgElement.dataset.src = image.url; // 使 data-src 存储 URL
                 
                 // 图片加载完成后移除加载状态
                 imgElement.onload = () => {
