@@ -428,6 +428,42 @@
         .cancel-btn:active {
             background-color: rgba(128, 128, 128, 0.3) !important; /* 统一的灰色效果 */
         }
+
+        /* 加载提示样式 */
+        .loading-toast {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            z-index: 2000;
+        }
+
+        .loading-spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-message {
+            color: white;
+            font-size: 14px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 <body>
@@ -825,7 +861,7 @@
                                 date: createDate
                             };
                         } catch (error) {
-                            console.error(`获取文件 ${file.name} 的历史记录失败:`, error);
+                            console.error(`获取文件 ${file.name} 的史录失败:`, error);
                             return {
                                 url: file.download_url,
                                 name: file.name,
@@ -1280,30 +1316,36 @@
             e.preventDefault();
             e.stopPropagation();
             
-            // 如果正在删除或没有选中图片，直接返回
             if (isDeleting || selectedImages.size === 0) {
                 return;
             }
             
-            // 如果用户取消确认，直接返回
             if (!confirm(`确定要删除这 ${selectedImages.size} 张图片吗？`)) {
                 return;
             }
             
             try {
-                // 设置删除状态
                 isDeleting = true;
                 deleteBtn.disabled = true;
                 
-                // 获取要删除的文件名列表
-                const filenames = Array.from(selectedImages).map(url => url.split('/').pop());
+                // 获取要删除的文件信息
+                const filesToDelete = Array.from(selectedImages).map(url => ({
+                    url: url,
+                    filename: url.split('/').pop()
+                }));
                 
-                // 逐个删除文件
-                for (const filename of filenames) {
+                // 立即从本地数组中移除这些图片
+                images = images.filter(img => !selectedImages.has(img.url));
+                
+                // 立即退出选择模式并刷新图库显示
+                exitSelectMode();
+                showGallery();
+                
+                // 在后台执行实际的删除操作
+                for (const file of filesToDelete) {
                     try {
-                        // 获取文件信息
                         const infoResponse = await fetch(
-                            `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}/${filename}`,
+                            `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}/${file.filename}`,
                             {
                                 headers: {
                                     'Authorization': `token ${getToken()}`,
@@ -1312,16 +1354,12 @@
                             }
                         );
                         
-                        // 如果文件不存在，跳过
-                        if (infoResponse.status === 404) {
-                            continue;
-                        }
+                        if (infoResponse.status === 404) continue;
                         
                         const fileInfo = await infoResponse.json();
                         
-                        // 删除文件
-                        const deleteResponse = await fetch(
-                            `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}/${filename}`,
+                        await fetch(
+                            `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}/${file.filename}`,
                             {
                                 method: 'DELETE',
                                 headers: {
@@ -1329,31 +1367,22 @@
                                     'Content-Type': 'application/json',
                                 },
                                 body: JSON.stringify({
-                                    message: `Delete ${filename}`,
+                                    message: `Delete ${file.filename}`,
                                     sha: fileInfo.sha
                                 })
                             }
                         );
-                        
-                        if (!deleteResponse.ok) {
-                            throw new Error(`删除失败: ${deleteResponse.status}`);
-                        }
                     } catch (error) {
-                        console.error(`删除 ${filename} 失败:`, error);
-                        throw error; // 如果任何文件删除失败，中断整个过程
+                        console.error(`删除 ${file.filename} 失败:`, error);
                     }
                 }
                 
-                // 删除成功后刷新页面
+                // 删除完成后静默刷新一次
                 await init();
-                exitSelectMode();
-                showGallery();
                 
             } catch (error) {
                 console.error('删除操作失败:', error);
-                alert('删除失败，请重试');
             } finally {
-                // 重置状态
                 isDeleting = false;
                 deleteBtn.disabled = false;
             }
@@ -1361,7 +1390,7 @@
 
         // 修改退出选择模式函数
         function exitSelectMode() {
-            if (isDeleting) return; // 如果正在删除，不允许退出选择模式
+            if (isDeleting) return;
             
             isSelectMode = false;
             selectedImages.clear();
@@ -1373,6 +1402,24 @@
                 thumb.classList.remove('select-mode');
                 thumb.classList.remove('selected');
             });
+        }
+
+        // 添加加载提示函数
+        function showLoading(message) {
+            const toast = document.createElement('div');
+            toast.className = 'loading-toast';
+            toast.innerHTML = `
+                <div class="loading-spinner"></div>
+                <div class="loading-message">${message}</div>
+            `;
+            document.body.appendChild(toast);
+            return toast;
+        }
+
+        function hideLoading(toast) {
+            if (toast && toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
         }
     </script>
 </body>
