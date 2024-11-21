@@ -150,12 +150,13 @@
         }
 
         .gallery-grid {
-            padding: 20px;
+            padding: 15px;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-            max-width: 1200px;
+            gap: 10px;
+            max-width: 100%;
             margin: 0 auto;
+            box-sizing: border-box;
         }
 
         /* 时间线 */
@@ -172,17 +173,14 @@
         /* 缩略图 */
         .thumbnail {
             aspect-ratio: 1;
+            width: 100%;
             background-size: cover;
             background-position: center;
-            background-repeat: no-repeat;
-            border-radius: 12px;
+            border-radius: 8px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: transform 0.3s ease;
             position: relative;
             overflow: hidden;
-            min-height: 120px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .thumbnail:active {
@@ -195,6 +193,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            min-height: 100px;
         }
 
         .thumbnail.loading::after {
@@ -247,14 +246,36 @@
         /* 适配不同屏幕尺寸 */
         @media (max-width: 768px) {
             .gallery-grid {
-                gap: 10px;
-                padding: 15px;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+                padding: 10px;
+            }
+
+            .gallery-header {
+                padding: 10px 15px;
+            }
+
+            .gallery-header h1 {
+                font-size: 16px;
+            }
+
+            .glass-btn {
+                padding: 6px 12px;
+                font-size: 14px;
+            }
+
+            body {
+                max-width: 100vw;
+                overflow-x: hidden;
             }
         }
 
-        @media (min-width: 1200px) {
+        /* 针对特小屏幕的优化 */
+        @media (max-width: 360px) {
             .gallery-grid {
-                gap: 20px;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 6px;
+                padding: 8px;
             }
         }
 
@@ -343,6 +364,11 @@
         let loading = document.getElementById('loading');
         let currentScale = 1;
         let startDistance = 0;
+        let startX = 0;
+        let currentX = 0;
+        let lastTranslateX = 0;
+        let lastTranslateY = 0;
+        let isPanning = false;
         
         // 添加重置状态的函数
         function resetTouchState() {
@@ -358,8 +384,23 @@
             });
         }
 
+        function resetImageTransform() {
+            const currentImage = wrapper.querySelector('.current img');
+            if (currentImage) {
+                currentImage.style.transition = 'transform 0.3s ease';
+                currentImage.style.transform = 'scale(1) translate(0, 0)';
+                currentScale = 1;
+                lastTranslateX = 0;
+                lastTranslateY = 0;
+                currentX = 0;
+                currentY = 0;
+            }
+        }
+
         function showImages() {
             wrapper.innerHTML = '';
+            resetTouchState();
+            resetImageTransform();
             currentScale = 1;
             isScaling = false;
             
@@ -402,16 +443,27 @@
                 // 双指触摸，准备缩放
                 isScaling = true;
                 isDragging = false;
+                isPanning = false;
                 startDistance = getDistance(e.touches[0], e.touches[1]);
                 currentScale = getCurrentScale();
                 e.preventDefault();
                 return;
             }
             
-            // 单指触摸，准备滑动
-            if (currentScale !== 1) return; // 如果图片已缩放，不允许滑动
+            const currentImage = wrapper.querySelector('.current img');
+            if (currentImage && currentScale > 1) {
+                // 如果图片已放大，准备拖动
+                isPanning = true;
+                isDragging = false;
+                startX = e.touches[0].clientX - lastTranslateX;
+                startY = e.touches[0].clientY - lastTranslateY;
+                currentImage.style.transition = 'none';
+                e.preventDefault();
+                return;
+            }
             
-            isScaling = false;
+            // 图片未放大，准备滑动切换
+            isPanning = false;
             startY = e.touches[0].clientY;
             isDragging = true;
             document.querySelectorAll('.image-item').forEach(item => {
@@ -431,14 +483,34 @@
                 const currentImage = wrapper.querySelector('.current img');
                 if (currentImage) {
                     currentImage.style.transition = 'none';
-                    currentImage.style.transform = `scale(${limitedScale})`;
+                    currentImage.style.transform = `scale(${limitedScale}) translate(${lastTranslateX}px, ${lastTranslateY}px)`;
                 }
                 e.preventDefault();
                 return;
             }
             
-            // 处理滑动
-            if (!isDragging || isScaling || currentScale !== 1) return;
+            if (isPanning) {
+                // 处理图片拖动
+                const currentImage = wrapper.querySelector('.current img');
+                if (currentImage) {
+                    currentX = e.touches[0].clientX - startX;
+                    currentY = e.touches[0].clientY - startY;
+                    
+                    // 限制拖动范围
+                    const maxX = (currentScale - 1) * currentImage.width / 2;
+                    const maxY = (currentScale - 1) * currentImage.height / 2;
+                    
+                    currentX = Math.min(Math.max(currentX, -maxX), maxX);
+                    currentY = Math.min(Math.max(currentY, -maxY), maxY);
+                    
+                    currentImage.style.transform = `scale(${currentScale}) translate(${currentX}px, ${currentY}px)`;
+                }
+                e.preventDefault();
+                return;
+            }
+            
+            // 处理图片切换滑动
+            if (!isDragging || isScaling || isPanning) return;
             
             const deltaY = e.touches[0].clientY - startY;
             currentY = deltaY;
@@ -447,17 +519,9 @@
             const next = wrapper.querySelector('.next');
             const prev = wrapper.querySelector('.prev');
 
-            if (current) {
-                current.style.transform = `translateY(${deltaY}px)`;
-            }
-            
-            if (next && deltaY < 0) {
-                next.style.transform = `translateY(calc(100% + ${deltaY}px))`;
-            }
-            
-            if (prev && deltaY > 0) {
-                prev.style.transform = `translateY(calc(-100% + ${deltaY}px))`;
-            }
+            if (current) current.style.transform = `translateY(${deltaY}px)`;
+            if (next && deltaY < 0) next.style.transform = `translateY(calc(100% + ${deltaY}px))`;
+            if (prev && deltaY > 0) prev.style.transform = `translateY(calc(-100% + ${deltaY}px))`;
 
             e.preventDefault();
         });
@@ -467,15 +531,21 @@
                 isScaling = false;
                 currentScale = getCurrentScale();
                 
-                // 如果缩放比例接近 1，则重置为 1
+                // 如果缩放比例接近 1，重置所有变换
                 if (Math.abs(currentScale - 1) < 0.1) {
-                    const currentImage = wrapper.querySelector('.current img');
-                    if (currentImage) {
-                        currentImage.style.transition = 'transform 0.3s ease';
-                        currentImage.style.transform = 'scale(1)';
-                        currentScale = 1;
-                    }
+                    resetImageTransform();
+                } else {
+                    // 保存当前的平移位置
+                    lastTranslateX = currentX;
+                    lastTranslateY = currentY;
                 }
+                return;
+            }
+            
+            if (isPanning) {
+                isPanning = false;
+                lastTranslateX = currentX;
+                lastTranslateY = currentY;
                 return;
             }
             
@@ -664,10 +734,17 @@
             galleryPage.style.display = 'none';
         });
 
-        // 推荐按钮（可选）
+        // 推荐按钮点击事件
         recommendBtn.addEventListener('click', () => {
             console.log('Recommend button clicked');
+            // 隐藏图库页面
             galleryPage.style.display = 'none';
+            
+            // 重新打乱图片顺序
+            images = shuffleArray([...images]);
+            
+            // 重新显���图片
+            showImages();
         });
 
         // 显示图库内容
