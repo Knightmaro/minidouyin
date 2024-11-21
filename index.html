@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>图片浏览器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+        }
+
+        .container {
+            height: 100vh;
+            position: relative;
+            touch-action: none; /* 防止浏览器默认的触摸行为 */
+        }
+
+        .image-wrapper {
+            position: absolute;
+            width: 100%;
+            height: 100vh;
+            transition: transform 0.3s ease;
+            transform: translateZ(0); /* 启用硬件加速 */
+            will-change: transform;
+            touch-action: none;
+        }
+
+        .image-item {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            left: 0;
+            overflow: hidden; /* 防止图片溢出 */
+        }
+
+        .image-item img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .loading {
+            color: white;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="image-wrapper" id="imageWrapper">
+            <!-- 图片将被动态插入这里 -->
+        </div>
+        <div class="loading" id="loading">加载中...</div>
+    </div>
+
+    <script>
+        // 配置信息
+        const config = {
+            // 替换成你的 GitHub 信息
+            owner: 'Knightmaro',
+            repo: 'imagetest',
+            path: 'images'
+        };
+
+        let images = [];
+        let currentIndex = 0;
+        let startY = 0;
+        let currentY = 0;
+        let isDragging = false;
+        let wrapper = document.getElementById('imageWrapper');
+        let loading = document.getElementById('loading');
+        
+        // 获取 GitHub 图片列表
+        async function fetchImages() {
+            try {
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`
+                );
+                const data = await response.json();
+                images = data
+                    .filter(file => /\.(jpg|jpeg|png|gif)$/i.test(file.name))
+                    .map(file => ({
+                        url: file.download_url,
+                        name: file.name
+                    }));
+                
+                loading.style.display = 'none';
+                loadInitialImages();
+            } catch (error) {
+                console.error('获取图片失败:', error);
+                loading.textContent = '加载失败，请刷新重试';
+            }
+        }
+
+        // 加载初始图片
+        function loadInitialImages() {
+            showImage(currentIndex);
+            // 预加载下一张
+            if (currentIndex + 1 < images.length) {
+                preloadImage(images[currentIndex + 1].url);
+            }
+        }
+
+        // 显示图片
+        function showImage(index) {
+            const imageItem = document.createElement('div');
+            imageItem.className = 'image-item';
+            
+            const img = document.createElement('img');
+            img.src = images[index].url;
+            img.alt = images[index].name;
+            
+            // 添加加载状态显示
+            img.onload = () => {
+                loading.style.display = 'none';
+            };
+            
+            img.onerror = () => {
+                loading.textContent = '图片加载失败';
+            };
+            
+            imageItem.appendChild(img);
+            wrapper.appendChild(imageItem);
+        }
+
+        // 预加载图片
+        function preloadImage(url) {
+            const img = new Image();
+            img.src = url;
+        }
+
+        // 触摸事件处理
+        wrapper.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            startY = e.touches[0].clientY;
+            wrapper.style.transition = 'none';
+        });
+
+        wrapper.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            const touch = e.touches[0];
+            const deltaY = touch.clientY - startY;
+            currentY = deltaY;
+            
+            // 限制滑动范围
+            if (currentIndex === 0 && deltaY > 100) return;
+            if (currentIndex === images.length - 1 && deltaY < -100) return;
+            
+            wrapper.style.transform = `translateY(${deltaY}px)`;
+            e.preventDefault();
+        });
+
+        wrapper.addEventListener('touchend', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            wrapper.style.transition = 'transform 0.3s ease';
+            
+            // 判断滑动方向和距离
+            if (Math.abs(currentY) > 50) {
+                if (currentY < 0 && currentIndex < images.length - 1) {
+                    // 向上滑
+                    currentIndex++;
+                } else if (currentY > 0 && currentIndex > 0) {
+                    // 向下滑
+                    currentIndex--;
+                }
+            }
+            
+            // 重置位置并显示新图片
+            wrapper.innerHTML = '';
+            showImage(currentIndex);
+            wrapper.style.transform = 'translateY(0)';
+            
+            // 预加载下一张
+            if (currentIndex + 1 < images.length) {
+                preloadImage(images[currentIndex + 1].url);
+            }
+        });
+
+        // 添加防止页面滚动
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+
+        // 添加键盘控制（可选）
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp' && currentIndex > 0) {
+                currentIndex--;
+                wrapper.innerHTML = '';
+                showImage(currentIndex);
+            } else if (e.key === 'ArrowDown' && currentIndex < images.length - 1) {
+                currentIndex++;
+                wrapper.innerHTML = '';
+                showImage(currentIndex);
+            }
+        });
+
+        // 初始化
+        fetchImages();
+    </script>
+</body>
+</html>
