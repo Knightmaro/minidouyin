@@ -9,6 +9,10 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         body {
@@ -21,9 +25,6 @@
             position: relative;
             overflow: hidden;
             touch-action: none;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            user-select: none;
         }
 
         .image-wrapper {
@@ -85,7 +86,7 @@
             bottom: 0;
             left: 0;
             right: 0;
-            height: 48px; /* 原来的0.6倍 */
+            height: 48px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -95,7 +96,7 @@
             z-index: 1000;
         }
 
-        /* 导��按钮样式 */
+        /* 导航按钮样式 */
         .nav-btn {
             flex: 1;
             height: 100%;
@@ -103,21 +104,19 @@
             background: transparent;
             color: white;
             font-size: 16px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
             padding: 0;
             margin: 0;
         }
 
-        /* 按钮激活状态 */
+        /* 按钮激活状态 - 简化为纯灰色 */
         .nav-btn:active {
-            background: rgba(128, 128, 128, 0.4); /* 灰色遮罩 */
+            background: rgba(34, 34, 34, 0.3);
         }
 
         /* 分割线 */
         .nav-divider {
             width: 1px;
-            height: 24px; /* 导航栏高度的一半 */
+            height: 24px;
             background: rgba(255, 255, 255, 0.2);
             margin: 0;
         }
@@ -412,6 +411,22 @@
         .gallery-action-bar {
             bottom: 48px; /* 确保在底部导航栏上方 */
         }
+
+        /* 所有按钮的基础样式 */
+        button {
+            -webkit-tap-highlight-color: transparent;
+            cursor: pointer;
+        }
+
+        /* 通用的点击反馈效果 */
+        .nav-btn:active,
+        .glass-btn:active,
+        .back-btn:active,
+        .upload-btn:active,
+        .delete-btn:active,
+        .cancel-btn:active {
+            background-color: rgba(128, 128, 128, 0.3) !important; /* 统一的灰色效果 */
+        }
     </style>
 </head>
 <body>
@@ -647,7 +662,7 @@
                     next.style.transform = 'translateY(0)';
                     currentIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0;
                 } else {
-                    // 向下滑��，显示上一张
+                    // 向下滑，显示上一张
                     current.style.transform = 'translateY(100%)';
                     prev.style.transform = 'translateY(0)';
                     currentIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1;
@@ -809,7 +824,7 @@
             // 重新打乱图片顺序
             images = shuffleArray([...images]);
             
-            // 重新显图片
+            // 重新��图片
             showImages();
         });
 
