@@ -36,7 +36,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.3s ease;
+            transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1);
             will-change: transform;
         }
 
@@ -165,9 +165,9 @@
             if (!isDragging) return;
             isDragging = false;
 
-            const threshold = 100; // 切换阈值
+            const threshold = 100;
             document.querySelectorAll('.image-item').forEach(item => {
-                item.style.transition = 'transform 0.3s ease';
+                item.style.transition = 'transform 0.5s cubic-bezier(0.33, 1, 0.68, 1)';
             });
 
             if (Math.abs(currentY) > threshold) {
@@ -178,8 +178,10 @@
                 }
             }
 
-            showImages();
-            currentY = 0;
+            setTimeout(() => {
+                showImages();
+                currentY = 0;
+            }, 500);
         });
 
         // 初始化加载
