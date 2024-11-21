@@ -50,9 +50,9 @@
             object-fit: contain;
             user-select: none;
             -webkit-user-drag: none;
-            transition: transform 0.3s ease;
             transform-origin: center center;
             will-change: transform;
+            touch-action: none;
         }
 
         .current {
@@ -82,41 +82,39 @@
         /* 底部导航栏 */
         .bottom-nav {
             position: fixed;
-            bottom: 20px;
+            bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 20px;
+            gap: 16px;
             z-index: 100;
         }
 
-        /* 磨砂玻璃按钮 */
+        /* 简化的磨砂玻璃按钮 */
         .glass-btn {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.2);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 15px;
+            border: none;
+            border-radius: 20px;
             padding: 12px 24px;
             color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 5px;
+            font-size: 15px;
             cursor: pointer;
             transition: all 0.3s ease;
+            min-width: 80px;
+            text-align: center;
         }
 
         .glass-btn:active {
             transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.25);
         }
 
-        .glass-btn .icon {
-            font-size: 20px;
-        }
-
-        .glass-btn span {
-            font-size: 12px;
+        /* 返回按钮样式 */
+        .back-btn {
+            padding: 8px 16px;
+            font-size: 14px;
         }
 
         /* 图库页面 */
@@ -141,18 +139,13 @@
             display: flex;
             align-items: center;
             gap: 20px;
-            z-index: 1;
+            z-index: 201;
         }
 
         .gallery-header h1 {
             color: white;
             font-size: 20px;
             font-weight: normal;
-        }
-
-        .back-btn {
-            padding: 8px;
-            font-size: 20px;
         }
 
         .gallery-grid {
@@ -270,21 +263,12 @@
         <div class="image-wrapper" id="imageWrapper"></div>
         <div class="loading" id="loading">加载中...</div>
         <div class="bottom-nav">
-            <button class="glass-btn" id="recommendBtn">
-                <i class="icon">🏠</i>
-                <span>推荐</span>
-            </button>
-            <button class="glass-btn" id="galleryBtn">
-                <i class="icon">🖼️</i>
-                <span>图库</span>
-            </button>
+            <button class="glass-btn" id="recommendBtn">推荐</button>
+            <button class="glass-btn" id="galleryBtn">图库</button>
         </div>
         <div class="gallery-page" id="galleryPage">
             <div class="gallery-header">
-                <button class="back-btn glass-btn" id="backBtn">
-                    <i class="icon">←</i>
-                </button>
-                <h1>图库</h1>
+                <button class="glass-btn back-btn" id="backBtn">返回</button>
             </div>
             <div class="gallery-grid" id="galleryGrid"></div>
         </div>
@@ -296,23 +280,40 @@
             // 替换成你的 GitHub 信息
             owner: 'Knightmaro',
             repo: 'imagetest',
-            path: 'images'
+            path: 'images',
+            token: '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'
         };
 
         let images = [];
         let startY = 0;
         let currentY = 0;
         let currentIndex = 0;
-        let isDragging = false;
         let isAnimating = false;
+        let isDragging = false;
+        let isScaling = false;
         let wrapper = document.getElementById('imageWrapper');
         let loading = document.getElementById('loading');
         let currentScale = 1;
-        let isScaling = false;
+        let startDistance = 0;
         
+        // 添加重置状态的函数
+        function resetTouchState() {
+            isAnimating = false;
+            isDragging = false;
+            isScaling = false;
+            startY = 0;
+            currentY = 0;
+            currentScale = 1;
+            document.querySelectorAll('.image-item').forEach(item => {
+                item.style.transition = 'none';
+                item.style.transform = '';
+            });
+        }
+
         function showImages() {
             wrapper.innerHTML = '';
             currentScale = 1;
+            isScaling = false;
             
             // 创建当前图片
             if (currentIndex >= 0 && currentIndex < images.length) {
@@ -339,6 +340,7 @@
             img.alt = images[index].name;
             img.style.transform = 'scale(1)';
             img.style.transformOrigin = 'center center';
+            img.style.transition = 'transform 0.3s ease';
             
             imageItem.appendChild(img);
             wrapper.appendChild(imageItem);
@@ -346,7 +348,22 @@
         }
 
         wrapper.addEventListener('touchstart', (e) => {
-            if (isAnimating || e.touches.length > 1) return;
+            if (isAnimating) return;
+            
+            if (e.touches.length === 2) {
+                // 双指触摸，准备缩放
+                isScaling = true;
+                isDragging = false;
+                startDistance = getDistance(e.touches[0], e.touches[1]);
+                currentScale = getCurrentScale();
+                e.preventDefault();
+                return;
+            }
+            
+            // 单指触摸，准备滑动
+            if (currentScale !== 1) return; // 如果图片已缩放，不允许滑动
+            
+            isScaling = false;
             startY = e.touches[0].clientY;
             isDragging = true;
             document.querySelectorAll('.image-item').forEach(item => {
@@ -355,7 +372,25 @@
         });
 
         wrapper.addEventListener('touchmove', (e) => {
-            if (!isDragging || isAnimating) return;
+            if (isAnimating) return;
+            
+            if (isScaling && e.touches.length === 2) {
+                // 处理双指缩放
+                const currentDistance = getDistance(e.touches[0], e.touches[1]);
+                const scale = (currentDistance / startDistance) * currentScale;
+                const limitedScale = Math.min(Math.max(scale, 0.5), 3);
+                
+                const currentImage = wrapper.querySelector('.current img');
+                if (currentImage) {
+                    currentImage.style.transition = 'none';
+                    currentImage.style.transform = `scale(${limitedScale})`;
+                }
+                e.preventDefault();
+                return;
+            }
+            
+            // 处理滑动
+            if (!isDragging || isScaling || currentScale !== 1) return;
             
             const deltaY = e.touches[0].clientY - startY;
             currentY = deltaY;
@@ -379,8 +414,24 @@
             e.preventDefault();
         });
 
-        wrapper.addEventListener('touchend', () => {
-            if (!isDragging || isAnimating) return;
+        wrapper.addEventListener('touchend', (e) => {
+            if (isScaling) {
+                isScaling = false;
+                currentScale = getCurrentScale();
+                
+                // 如果缩放比例接近 1，则重置为 1
+                if (Math.abs(currentScale - 1) < 0.1) {
+                    const currentImage = wrapper.querySelector('.current img');
+                    if (currentImage) {
+                        currentImage.style.transition = 'transform 0.3s ease';
+                        currentImage.style.transform = 'scale(1)';
+                        currentScale = 1;
+                    }
+                }
+                return;
+            }
+            
+            if (!isDragging || isAnimating || currentScale !== 1) return;
             isDragging = false;
             isAnimating = true;
 
@@ -389,17 +440,19 @@
             const next = wrapper.querySelector('.next');
             const prev = wrapper.querySelector('.prev');
 
-            const transition = 'transform 0.8s cubic-bezier(0.33, 0.66, 0.66, 1)';
+            const transition = 'transform 0.3s cubic-bezier(0.33, 1, 0.68, 1)';
             document.querySelectorAll('.image-item').forEach(item => {
                 item.style.transition = transition;
             });
 
             const handleTransitionEnd = (e) => {
                 if (e.target.classList.contains('current')) {
+                    isAnimating = false;
                     showImages();
                     currentY = 0;
-                    isAnimating = false;
-                    current.removeEventListener('transitionend', handleTransitionEnd);
+                    document.querySelectorAll('.image-item').forEach(item => {
+                        item.removeEventListener('transitionend', handleTransitionEnd);
+                    });
                 }
             };
 
@@ -412,6 +465,10 @@
                     current.style.transform = 'translateY(100%)';
                     prev.style.transform = 'translateY(0)';
                     currentIndex--;
+                } else {
+                    resetTouchState();
+                    showImages();
+                    return;
                 }
             } else {
                 if (current) current.style.transform = 'translateY(0)';
@@ -419,9 +476,15 @@
                 if (prev) prev.style.transform = 'translateY(-100%)';
             }
 
-            if (current) {
-                current.addEventListener('transitionend', handleTransitionEnd);
-            }
+            document.querySelectorAll('.image-item').forEach(item => {
+                item.addEventListener('transitionend', handleTransitionEnd, { once: true });
+            });
+        });
+
+        // 添加触摸取消处理
+        wrapper.addEventListener('touchcancel', () => {
+            resetTouchState();
+            showImages();
         });
 
         wrapper.addEventListener('gesturestart', (e) => {
@@ -469,18 +532,34 @@
         async function init() {
             try {
                 const response = await fetch(
-                    `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`
+                    `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${config.path}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
                 );
                 const data = await response.json();
                 
-                // 获取每个文件的详细信息，包括创建日期
+                if (!Array.isArray(data)) {
+                    console.error('Unexpected API response:', data);
+                    loading.textContent = '加载失败，请刷新重试';
+                    return;
+                }
+                
                 const imagePromises = data
                     .filter(file => /\.(jpg|jpeg|png|gif)$/i.test(file.name))
                     .map(async file => {
                         try {
-                            // 获取文件�� commit 历史
                             const commitResponse = await fetch(
-                                `https://api.github.com/repos/${config.owner}/${config.repo}/commits?path=${config.path}/${file.name}&page=1&per_page=1`
+                                `https://api.github.com/repos/${config.owner}/${config.repo}/commits?path=${config.path}/${file.name}&page=1&per_page=1`,
+                                {
+                                    headers: {
+                                        'Authorization': `token ${config.token}`,
+                                        'Accept': 'application/vnd.github.v3+json'
+                                    }
+                                }
                             );
                             const commits = await commitResponse.json();
                             const createDate = commits[0]?.commit?.author?.date || new Date().toISOString();
@@ -495,16 +574,19 @@
                             return {
                                 url: file.download_url,
                                 name: file.name,
-                                date: new Date().toISOString() // 如果获取失败，使用当前时间
+                                date: new Date().toISOString()
                             };
                         }
                     });
 
                 images = await Promise.all(imagePromises);
-                
-                // 随机排序图片数组
                 images = shuffleArray(images);
                 
+                if (images.length === 0) {
+                    loading.textContent = '没有找到图片';
+                    return;
+                }
+
                 loading.style.display = 'none';
                 showImages();
             } catch (error) {
@@ -523,12 +605,20 @@
 
         // 显示图库
         galleryBtn.addEventListener('click', () => {
+            console.log('Gallery button clicked');
             galleryPage.style.display = 'block';
             showGallery();
         });
 
-        // 返回推荐页
+        // 返回荐页
         backBtn.addEventListener('click', () => {
+            console.log('Back button clicked');
+            galleryPage.style.display = 'none';
+        });
+
+        // 推荐按钮（可选）
+        recommendBtn.addEventListener('click', () => {
+            console.log('Recommend button clicked');
             galleryPage.style.display = 'none';
         });
 
@@ -566,7 +656,7 @@
                     if (thumbnail.classList.contains('loading')) {
                         thumbnail.classList.remove('loading');
                         thumbnail.classList.add('error');
-                        thumbnail.textContent = '加载超��';
+                        thumbnail.textContent = '加载超';
                         console.error('Image load timeout:', image.url);
                     }
                 }, 30000);
@@ -603,6 +693,23 @@
                 
                 galleryGrid.appendChild(thumbnail);
             });
+        }
+
+        // 辅助函数：计算两点之间的距离
+        function getDistance(touch1, touch2) {
+            const dx = touch1.clientX - touch2.clientX;
+            const dy = touch1.clientY - touch2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // 辅助函数：获取当前缩放比例
+        function getCurrentScale() {
+            const currentImage = wrapper.querySelector('.current img');
+            if (!currentImage) return 1;
+            
+            const transform = currentImage.style.transform;
+            const match = transform.match(/scale\((.*?)\)/);
+            return match ? parseFloat(match[1]) : 1;
         }
     </script>
 </body>
