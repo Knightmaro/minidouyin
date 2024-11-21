@@ -20,6 +20,10 @@
             height: 100vh;
             position: relative;
             overflow: hidden;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .image-wrapper {
@@ -46,6 +50,9 @@
             object-fit: contain;
             user-select: none;
             -webkit-user-drag: none;
+            transition: transform 0.3s ease;
+            transform-origin: center center;
+            will-change: transform;
         }
 
         .current {
@@ -93,11 +100,15 @@
         let currentY = 0;
         let currentIndex = 0;
         let isDragging = false;
+        let isAnimating = false;
         let wrapper = document.getElementById('imageWrapper');
         let loading = document.getElementById('loading');
+        let currentScale = 1;
+        let isScaling = false;
         
         function showImages() {
             wrapper.innerHTML = '';
+            currentScale = 1;
             
             // 创建当前图片
             if (currentIndex >= 0 && currentIndex < images.length) {
@@ -122,6 +133,8 @@
             const img = document.createElement('img');
             img.src = images[index].url;
             img.alt = images[index].name;
+            img.style.transform = 'scale(1)';
+            img.style.transformOrigin = 'center center';
             
             imageItem.appendChild(img);
             wrapper.appendChild(imageItem);
@@ -129,6 +142,7 @@
         }
 
         wrapper.addEventListener('touchstart', (e) => {
+            if (isAnimating || e.touches.length > 1) return;
             startY = e.touches[0].clientY;
             isDragging = true;
             document.querySelectorAll('.image-item').forEach(item => {
@@ -137,7 +151,7 @@
         });
 
         wrapper.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
+            if (!isDragging || isAnimating) return;
             
             const deltaY = e.touches[0].clientY - startY;
             currentY = deltaY;
@@ -162,55 +176,92 @@
         });
 
         wrapper.addEventListener('touchend', () => {
-            if (!isDragging) return;
+            if (!isDragging || isAnimating) return;
             isDragging = false;
+            isAnimating = true;
 
             const threshold = 100;
             const current = wrapper.querySelector('.current');
             const next = wrapper.querySelector('.next');
             const prev = wrapper.querySelector('.prev');
 
-            // 使用更长的动画时间和更自然的缓动函数
-            const transition = 'transform 0.3s cubic-bezier(0.33, 0.66, 0.66, 1)';
+            const transition = 'transform 0.8s cubic-bezier(0.33, 0.66, 0.66, 1)';
             document.querySelectorAll('.image-item').forEach(item => {
                 item.style.transition = transition;
             });
 
+            const handleTransitionEnd = (e) => {
+                if (e.target.classList.contains('current')) {
+                    showImages();
+                    currentY = 0;
+                    isAnimating = false;
+                    current.removeEventListener('transitionend', handleTransitionEnd);
+                }
+            };
+
             if (Math.abs(currentY) > threshold) {
                 if (currentY < 0 && currentIndex < images.length - 1) {
-                    // 向上滑动到下一张
                     current.style.transform = 'translateY(-100%)';
                     next.style.transform = 'translateY(0)';
                     currentIndex++;
                 } else if (currentY > 0 && currentIndex > 0) {
-                    // 向下滑动到上一张
                     current.style.transform = 'translateY(100%)';
                     prev.style.transform = 'translateY(0)';
                     currentIndex--;
                 }
             } else {
-                // 回到原位
                 if (current) current.style.transform = 'translateY(0)';
                 if (next) next.style.transform = 'translateY(100%)';
                 if (prev) prev.style.transform = 'translateY(-100%)';
             }
-
-            // 使用 transitionend 事件来处理动画结束
-            const handleTransitionEnd = (e) => {
-                if (e.target.classList.contains('current')) {
-                    showImages();
-                    currentY = 0;
-                    // 移除事件监听
-                    current.removeEventListener('transitionend', handleTransitionEnd);
-                }
-            };
 
             if (current) {
                 current.addEventListener('transitionend', handleTransitionEnd);
             }
         });
 
-        // 初始化加载
+        wrapper.addEventListener('gesturestart', (e) => {
+            e.preventDefault();
+            if (isAnimating) return;
+            isScaling = true;
+            const currentImg = wrapper.querySelector('.current img');
+            if (currentImg) {
+                currentScale = parseFloat(currentImg.style.transform.replace('scale(', '')) || 1;
+            }
+        });
+
+        wrapper.addEventListener('gesturechange', (e) => {
+            e.preventDefault();
+            if (!isScaling || isAnimating) return;
+            
+            const currentImg = wrapper.querySelector('.current img');
+            if (currentImg) {
+                const newScale = currentScale * e.scale;
+                if (newScale >= 0.5 && newScale <= 3) {
+                    currentImg.style.transform = `scale(${newScale})`;
+                }
+            }
+        });
+
+        wrapper.addEventListener('gestureend', (e) => {
+            e.preventDefault();
+            isScaling = false;
+            const currentImg = wrapper.querySelector('.current img');
+            if (currentImg) {
+                currentScale = parseFloat(currentImg.style.transform.replace('scale(', '')) || 1;
+            }
+        });
+
+        // 添加一个随机排序函数
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // 修改 init 函数
         async function init() {
             try {
                 const response = await fetch(
@@ -223,6 +274,9 @@
                         url: file.download_url,
                         name: file.name
                     }));
+                
+                // 随机排序图片数组
+                images = shuffleArray(images);
                 
                 loading.style.display = 'none';
                 showImages();
