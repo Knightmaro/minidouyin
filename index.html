@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>图片浏览器</title>
     <style>
         * {
@@ -16,8 +16,14 @@
             background: #000;
         }
 
+        :root {
+            --safe-area-inset-top: env(safe-area-inset-top, 20px);
+        }
+
         .container {
             height: 100vh;
+            height: calc(100vh - var(--safe-area-inset-top));
+            margin-top: var(--safe-area-inset-top);
             position: relative;
             overflow: hidden;
             touch-action: none;
@@ -28,20 +34,22 @@
 
         .image-wrapper {
             position: relative;
-            height: 100vh;
+            height: 100%;
             touch-action: none;
         }
 
         .image-item {
             position: absolute;
             width: 100%;
-            height: 100vh;
+            height: 100%;
             left: 0;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: transform 0.3s cubic-bezier(0.33, 1, 0.68, 1);
             will-change: transform;
+            backface-visibility: hidden;
+            transform-style: preserve-3d;
         }
 
         .image-item img {
@@ -140,10 +148,10 @@
         /* 图库页面 */
         .gallery-page {
             position: fixed;
-            top: 0;
+            top: var(--safe-area-inset-top);
             left: 0;
             width: 100%;
-            height: 100%;
+            height: calc(100% - var(--safe-area-inset-top));
             background: #000;
             z-index: 200;
             display: none;
@@ -153,9 +161,10 @@
         .gallery-header {
             position: sticky;
             top: 0;
-            padding: 20px;
+            padding: 12px 20px;
             background: rgba(0, 0, 0, 0.8);
             backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             display: flex;
             align-items: center;
             z-index: 201;
@@ -468,7 +477,7 @@
             tokenPart2: 'OmutxTm6wDYh0p0Aay'
         };
 
-        // 获取完整 token 的函数
+        // 获取整 token 的函数
         function getToken() {
             return config.tokenPart1 + config.tokenPart2;
         }
